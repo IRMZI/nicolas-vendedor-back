@@ -212,12 +212,13 @@ model Product {
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
 
-  images     ProductImage[]
-  categories ProductCategory[]
-  tags       ProductTag[]
-  attributes ProductAttribute[]
-  leads      Lead[]
-  events     AnalyticsEvent[]
+  images        ProductImage[]
+  categories    ProductCategory[]
+  tags          ProductTag[]
+  attributes    ProductAttribute[]
+  filterOptions ProductFilterOption[]
+  leads         Lead[]
+  events        AnalyticsEvent[]
 
   @@index([slug])
   @@index([status, deletedAt])
@@ -297,6 +298,53 @@ model ProductAttribute {
 
   @@index([productId, position])
   @@map("product_attributes")
+}
+
+// ---------------------------------------------------------------------------
+// Filtros dinamicos (ex.: Marca, Cambio, Combustivel)
+// ---------------------------------------------------------------------------
+
+model FilterGroup {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  position  Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options FilterOption[]
+
+  @@index([isActive, position])
+  @@map("filter_groups")
+}
+
+model FilterOption {
+  id        String   @id @default(uuid())
+  groupId   String
+  name      String
+  slug      String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  group    FilterGroup           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  products ProductFilterOption[]
+
+  @@unique([groupId, slug])
+  @@index([groupId, position])
+  @@map("filter_options")
+}
+
+model ProductFilterOption {
+  productId String
+  optionId  String
+
+  product Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  option  FilterOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([productId, optionId])
+  @@index([optionId])
+  @@map("product_filter_options")
 }
 
 // ---------------------------------------------------------------------------

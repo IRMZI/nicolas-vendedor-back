@@ -14,6 +14,23 @@ export const catalogQuerySchema = z.object({
   sort: z
     .enum(['recent', 'most_viewed', 'name_asc', 'name_desc', 'price_asc', 'price_desc'])
     .default('recent'),
+  // Filtros dinamicos: f[marca]=toyota,honda&f[cambio]=automatico
+  f: z
+    .record(z.string().max(80), z.string().max(400))
+    .optional()
+    .transform((value) => {
+      if (!value) return undefined;
+      const clean: Record<string, string[]> = {};
+      for (const [group, csv] of Object.entries(value)) {
+        const slugs = csv
+          .split(',')
+          .map((slug) => slug.trim())
+          .filter((slug) => /^[a-z0-9-]{1,80}$/.test(slug))
+          .slice(0, 20);
+        if (slugs.length > 0) clean[group] = slugs;
+      }
+      return Object.keys(clean).length > 0 ? clean : undefined;
+    }),
 });
 
 export type CatalogQueryDto = z.infer<typeof catalogQuerySchema>;

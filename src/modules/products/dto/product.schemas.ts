@@ -54,6 +54,7 @@ export const createProductSchema = z
     seoDescription: optionalText(320),
     publishedAt: z.coerce.date().optional().nullable(),
     categoryIds: z.array(z.string().uuid()).default([]),
+    filterOptionIds: z.array(z.string().uuid()).max(100).default([]),
     tags: z.array(z.string().trim().min(1).max(40)).max(30).default([]),
     images: z.array(productImageSchema).max(20).default([]),
     attributes: z.array(productAttributeSchema).max(50).default([]),

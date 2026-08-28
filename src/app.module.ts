@@ -23,6 +23,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
 import { ProductsModule } from './modules/products/products.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { TagsModule } from './modules/tags/tags.module';
+import { FiltersModule } from './modules/filters/filters.module';
 import { LeadsModule } from './modules/leads/leads.module';
 import { BannersModule } from './modules/banners/banners.module';
 import { TestimonialsModule } from './modules/testimonials/testimonials.module';
@@ -56,6 +57,7 @@ import { HealthController } from './health.controller';
     ProductsModule,
     CategoriesModule,
     TagsModule,
+    FiltersModule,
     LeadsModule,
     BannersModule,
     TestimonialsModule,

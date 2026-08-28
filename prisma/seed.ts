@@ -570,6 +570,80 @@ async function main() {
     console.log('  Eventos ja existem, pulando.');
   }
 
+
+  console.log('> Criando filtros dinamicos...');
+  const filterGroupsData: Array<{ name: string; slug: string; position: number; options: string[] }> = [
+    { name: 'Marca', slug: 'marca', position: 0, options: ['Volkswagen', 'Chevrolet', 'Fiat', 'Toyota', 'Honda', 'Hyundai', 'Jeep', 'Renault'] },
+    { name: 'Cambio', slug: 'cambio', position: 1, options: ['Automatico', 'Manual'] },
+    { name: 'Combustivel', slug: 'combustivel', position: 2, options: ['Flex', 'Diesel', 'Hibrido'] },
+  ];
+
+  const filterOptionIds: Record<string, string> = {};
+  for (const groupData of filterGroupsData) {
+    const group = await prisma.filterGroup.upsert({
+      where: { slug: groupData.slug },
+      update: {},
+      create: { name: groupData.name, slug: groupData.slug, position: groupData.position, isActive: true },
+    });
+    for (const [index, optionName] of groupData.options.entries()) {
+      const optionSlug = optionName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-');
+      const option = await prisma.filterOption.upsert({
+        where: { groupId_slug: { groupId: group.id, slug: optionSlug } },
+        update: {},
+        create: { groupId: group.id, name: optionName, slug: optionSlug, position: index },
+      });
+      filterOptionIds[`${groupData.slug}:${optionSlug}`] = option.id;
+    }
+  }
+
+  console.log('> Vinculando veiculos aos filtros...');
+  const brandByPrefix: Array<[string, string]> = [
+    ['volkswagen', 'marca:volkswagen'],
+    ['chevrolet', 'marca:chevrolet'],
+    ['fiat', 'marca:fiat'],
+    ['toyota', 'marca:toyota'],
+    ['honda', 'marca:honda'],
+    ['hyundai', 'marca:hyundai'],
+    ['jeep', 'marca:jeep'],
+    ['renault', 'marca:renault'],
+  ];
+
+  const allProducts = await prisma.product.findMany({
+    include: { attributes: true },
+  });
+
+  for (const product of allProducts) {
+    const keys: string[] = [];
+    const lowerName = product.name.toLowerCase();
+    const brand = brandByPrefix.find(([prefix]) => lowerName.startsWith(prefix));
+    if (brand) keys.push(brand[1]);
+
+    const gearbox = product.attributes.find((attr) => attr.name.toLowerCase().startsWith('cambio'));
+    if (gearbox) {
+      keys.push(gearbox.value.toLowerCase().includes('manual') ? 'cambio:manual' : 'cambio:automatico');
+    }
+
+    const fuel = product.attributes.find((attr) => attr.name.toLowerCase().startsWith('combustivel'));
+    if (fuel) {
+      const value = fuel.value.toLowerCase();
+      if (value.includes('diesel')) keys.push('combustivel:diesel');
+      else if (value.includes('hibrido')) keys.push('combustivel:hibrido');
+      else keys.push('combustivel:flex');
+    }
+
+    const optionIds = keys.map((key) => filterOptionIds[key]).filter(Boolean);
+    if (optionIds.length > 0) {
+      await prisma.productFilterOption.createMany({
+        data: optionIds.map((optionId) => ({ productId: product.id, optionId })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
   console.log('\nSeed concluido!');
   console.log(`  Painel: /admin`);
   console.log(`  E-mail: ${ADMIN_EMAIL}`);

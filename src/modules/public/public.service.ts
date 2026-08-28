@@ -5,6 +5,7 @@ import { SettingsService } from '../settings/settings.service';
 import { BannersService } from '../banners/banners.service';
 import { TestimonialsService } from '../testimonials/testimonials.service';
 import { HomeSectionsService } from '../home-sections/home-sections.service';
+import { FiltersService } from '../filters/filters.service';
 import { buildPagination, skipTake, type Paginated } from '@/common/utils/pagination.util';
 import type { CatalogQueryDto } from './dto/public.schemas';
 
@@ -44,6 +45,7 @@ export class PublicService {
     private readonly banners: BannersService,
     private readonly testimonials: TestimonialsService,
     private readonly homeSections: HomeSectionsService,
+    private readonly filters: FiltersService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -86,6 +88,15 @@ export class PublicService {
       ...(query.featured === 'true' ? { isFeatured: true } : {}),
       ...(query.category ? { categories: { some: { category: { slug: query.category } } } } : {}),
       ...(query.tag ? { tags: { some: { tag: { slug: query.tag } } } } : {}),
+      ...(query.f
+        ? {
+            AND: Object.entries(query.f).map(([groupSlug, optionSlugs]) => ({
+              filterOptions: {
+                some: { option: { slug: { in: optionSlugs }, group: { slug: groupSlug, isActive: true } } },
+              },
+            })),
+          }
+        : {}),
       ...(query.minPrice !== undefined || query.maxPrice !== undefined
         ? {
             price: {
@@ -129,13 +140,14 @@ export class PublicService {
         minPrice: query.minPrice ?? null,
         maxPrice: query.maxPrice ?? null,
         sort: query.sort,
+        f: query.f ?? null,
       },
     };
   }
 
   /** Faixa de precos real do catalogo, usada no filtro do site. */
   async catalogFilters() {
-    const [range, categories, tags] = await Promise.all([
+    const [range, categories, tags, filterGroups] = await Promise.all([
       this.prisma.product.aggregate({
         where: PUBLIC_PRODUCT_WHERE,
         _min: { price: true },
@@ -148,9 +160,11 @@ export class PublicService {
         orderBy: { name: 'asc' },
         take: 40,
       }),
+      this.filters.publicGroups(),
     ]);
 
     return {
+      filterGroups,
       priceRange: {
         min: range._min.price ? Number(range._min.price) : 0,
         max: range._max.price ? Number(range._max.price) : 0,

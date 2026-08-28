@@ -4,6 +4,7 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { AuditService, type AuditContext } from '../audit/audit.service';
 import { StorageService } from '../storage/storage.service';
 import { TagsService } from '../tags/tags.service';
+import { FiltersService } from '../filters/filters.service';
 import { sanitizeHtml } from '@/common/utils/sanitize.util';
 import { toSlug, uniqueSlug } from '@/common/utils/slug.util';
 import { buildPagination, skipTake, type Paginated } from '@/common/utils/pagination.util';
@@ -18,6 +19,13 @@ const PRODUCT_INCLUDE = {
   images: { orderBy: { position: 'asc' } },
   categories: { include: { category: { select: { id: true, name: true, slug: true } } } },
   tags: { include: { tag: { select: { id: true, name: true, slug: true } } } },
+  filterOptions: {
+    include: {
+      option: {
+        select: { id: true, name: true, slug: true, groupId: true, group: { select: { id: true, name: true, slug: true } } },
+      },
+    },
+  },
   attributes: { orderBy: { position: 'asc' } },
 } satisfies Prisma.ProductInclude;
 
@@ -28,6 +36,7 @@ export class ProductsService {
     private readonly audit: AuditService,
     private readonly storage: StorageService,
     private readonly tags: TagsService,
+    private readonly filters: FiltersService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -105,6 +114,7 @@ export class ProductsService {
 
   async create(dto: CreateProductDto, ctx: AuditContext) {
     await this.assertCategoriesExist(dto.categoryIds);
+    await this.filters.assertOptionsExist(dto.filterOptionIds);
 
     const slug = await uniqueSlug(dto.slug || dto.name, (candidate) => this.slugTaken(candidate));
     const tagIds = await this.tags.ensureTags(dto.tags);
@@ -116,6 +126,7 @@ export class ProductsService {
         publishedAt: dto.publishedAt ?? (dto.status === ProductStatus.ACTIVE ? new Date() : null),
         categories: { create: dto.categoryIds.map((categoryId) => ({ categoryId })) },
         tags: { create: tagIds.map((tagId) => ({ tagId })) },
+        filterOptions: { create: dto.filterOptionIds.map((optionId) => ({ optionId })) },
         images: { create: this.normalizeImages(dto.images) },
         attributes: {
           create: dto.attributes.map((attribute, index) => ({
@@ -144,6 +155,7 @@ export class ProductsService {
     if (!current) throw new NotFoundException('Produto nao encontrado.');
 
     await this.assertCategoriesExist(dto.categoryIds);
+    await this.filters.assertOptionsExist(dto.filterOptionIds);
 
     const slug =
       dto.slug && dto.slug !== current.slug
@@ -159,6 +171,7 @@ export class ProductsService {
     const product = await this.prisma.$transaction(async (tx) => {
       await tx.productCategory.deleteMany({ where: { productId: id } });
       await tx.productTag.deleteMany({ where: { productId: id } });
+      await tx.productFilterOption.deleteMany({ where: { productId: id } });
       await tx.productAttribute.deleteMany({ where: { productId: id } });
       await tx.productImage.deleteMany({ where: { productId: id } });
 
@@ -172,6 +185,7 @@ export class ProductsService {
             (dto.status === ProductStatus.ACTIVE ? (current.publishedAt ?? new Date()) : current.publishedAt),
           categories: { create: dto.categoryIds.map((categoryId) => ({ categoryId })) },
           tags: { create: tagIds.map((tagId) => ({ tagId })) },
+          filterOptions: { create: dto.filterOptionIds.map((optionId) => ({ optionId })) },
           images: { create: this.normalizeImages(dto.images) },
           attributes: {
             create: dto.attributes.map((attribute, index) => ({
@@ -224,6 +238,7 @@ export class ProductsService {
         seoDescription: source.seoDescription,
         categories: { create: source.categories.map((item) => ({ categoryId: item.categoryId })) },
         tags: { create: source.tags.map((item) => ({ tagId: item.tagId })) },
+        filterOptions: { create: source.filterOptions.map((item) => ({ optionId: item.optionId })) },
         // As imagens sao reaproveitadas por URL; o arquivo original continua unico no storage.
         images: {
           create: source.images.map((image) => ({
@@ -604,6 +619,8 @@ export class ProductsService {
         product.images?.find((image: any) => image.isPrimary)?.url ?? product.images?.[0]?.url ?? null,
       categories: product.categories?.map((item: any) => item.category) ?? [],
       tags: product.tags?.map((item: any) => item.tag) ?? [],
+      filterOptionIds: product.filterOptions?.map((item: any) => item.optionId ?? item.option?.id) ?? [],
+      filterOptions: product.filterOptions?.map((item: any) => item.option).filter(Boolean) ?? [],
     };
   }
 }
