@@ -8,7 +8,7 @@ coverage/
 *.log
 npm-debug.log*
 .DS_Store
-uploads/
-!uploads/.gitkeep
+/uploads/*
+!/uploads/.gitkeep
 .tsbuildinfo
 *.tsbuildinfo
